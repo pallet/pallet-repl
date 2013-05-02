@@ -1,0 +1,158 @@
+<html lang="en">
+  <head>
+    <title>pallet.repl documentation</title>
+    <link href="css/default.css" type="text/css" rel="stylesheet" />
+    <link href="css/codox-md.css" type="text/css" rel="stylesheet" />
+    <script type="text/javascript" src="js/jquery.min.js"></script>
+    <script type="text/javascript" src="js/page_effects.js"></script>
+  </head>
+  <body>
+    <header>
+    <div data-scrollspy="scrollspy" class="topbar">
+      <div class="topbar-inner">
+        <div class="container">
+          <a href="/" class="brand">Pallet</a>
+          <ul class="nav">
+            <li class=""><a href="/doc">Documentation</a></li>
+            <li class=""><a href="/news">News</a></li>
+            <li class=""><a href="/blog">Blog</a></li>
+            <li class=""><a href="https://github.com/pallet/pallet">Code</a></li>
+            <li class=""><a href="/services">Services</a></li>
+            <li class=""><a href="/support">Support</a></li>
+            <li class=""><a href="/contact">Contact</a></li>
+          </ul>
+          <form action="http://www.google.com/search" method="get" class="pull-right">
+            <input placeholder="Search" value="" maxlength="255" name="q" type="text" />
+            <input value="palletops.com" type="hidden" name="sitesearch" />
+          </form>
+        </div>
+      </div>
+    </div>
+      <div id="header">
+        <h1><a href="http://palletops.com"><span class="project-title">Pallet-repl 0.8.0-SNAPSHOT API documentation</span></a></h1>
+      </div>
+    </header>
+    <navigation>
+      <div id="namespaces" class="sidebar">
+        <h3>Namespaces</h3>
+        <ul class="ns-links">
+          <li class="ns-list"><a class="ns-link ns-name" href="pallet.repl.html">pallet.repl</a></li>
+        </ul>
+      </div>
+      <div id="vars" class="sidebar">
+        <h3>Public Vars</h3>
+        <ul class="ns-var-links">
+          <li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-explain-phase">explain-phase</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-explain-plan">explain-plan</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-show-group">show-group</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-show-nodes">show-nodes</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-show-nodes*">show-nodes*</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-use-pallet">use-pallet</a></li>
+        </ul>
+      </div>
+    </navigation>
+    <article>
+      <div id="content" class="namespace-docs">
+        <h2 class="namespace-title">pallet.repl documentation</h2>
+        <div class="doc"><p>A namespace that can be used to pull in most of pallet's namespaces.  uesful
+when working at the clojure REPL.</p>
+</div>
+        <div class="ns-vars">
+          <div class="public">
+            <h3><a id="var-explain-phase" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L161">explain-phase</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[server-spec &amp; {:keys [phase print-scripts print-forms node os-family os-version], :or {print-scripts true, print-forms true, os-family :ubuntu, phase :configure}, :as options}]</div>
+            
+            
+            <div class="doc"><p>Prints the action plan and corresponding shell scripts built as a result of
+executing a phase from the <code>server-spec</code>.  The <code>:configure</code> phase is explained
+by default. The phase can be specified with the <code>:phase</code> keyword.</p>
+
+<p>  By default, the plan function is run against a mock node with
+this configuration:</p>
+
+<pre><code>["mock-node" "mock-group" "0.0.0.0" :ubuntu :os-version "12.04"]
+</code></pre>
+
+<p>and you can override this by passing your own node vector as <code>:node</code>,
+or just change the os-family/os-version for the node by passing
+<code>:os-family</code> and <code>:os-version</code>. If a os-family is passed but no
+os-version, then a sane default for os-version will be picked. If you
+specify <code>:node</code> then <code>:os-family</code> and <code>:os-version</code> are ignored.</p>
+
+<p>By default, both the generated action forms (clojure forms) and the
+scripts corresponding to those action forms will be shown, but you can
+disable them by passing <code>:print-scripts false</code> and/or `:print-forms
+false` </p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-explain-plan" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L119">explain-plan</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[pfn &amp; {:keys [settings-phase print-scripts print-forms node os-family os-version group-name], :or {print-scripts true, print-forms true, os-family :ubuntu, group-name "mock-group"}}]</div>
+            
+            
+            <div class="doc"><p>Prints the action plan and corresponding shell scripts built as a
+result of executing a plan function <code>pfn</code>. If the plan function
+requires settings to be set, adding the settings function call to
+<code>:settings-phase</code></p>
+
+<p>  By default, the plan function is run against a mock node with
+this configuration:</p>
+
+<pre><code>["mock-node" "mock-group" "0.0.0.0" :ubuntu :os-version "12.04"]
+</code></pre>
+
+<p>and you can override this by passing your own node vector as <code>:node</code>,
+or just change the os-family/os-version for the node by passing
+<code>:os-family</code> and <code>:os-version</code>. If a os-family is passed but no
+os-version, then a sane default for os-version will be picked. If you
+specify <code>:node</code> then <code>:os-family</code> and <code>:os-version</code> are ignored.</p>
+
+<p>By default, both the generated action forms (clojure forms) and the
+scripts corresponding to those action forms will be shown, but you can
+disable them by passing <code>:print-scripts false</code> and/or `:print-forms
+false` </p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-show-group" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L47">show-group</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[compute group-name &amp; keys]</div>
+            
+            
+            <div class="doc"><p>Prints a table with the information on all the nodes belonging to a
+<code>group</code> (identified by it's name) on a particular <code>compute</code>
+provider. The columns displayed can be modified by passing an
+optional <code>keys</code> vector containing the keys to display as
+columns (order is significative)</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-show-nodes" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L37">show-nodes</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[compute &amp; [keys]]</div>
+            
+            
+            <div class="doc"><p>Prints a table with the information on all the nodes in a compute provider.
+The columns displayed can be modified by passing an optional <code>keys</code>
+vector containing the keys to display as columns (order is
+significative)</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-show-nodes*" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L24">show-nodes*</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[nodes &amp; [keys]]</div>
+            
+            
+            <div class="doc"><p>Prints the list of nodes in <code>nodes</code> as a table. The columns of the
+table and their order can be modified by passing a vector with all
+the keys in <code>keys</code></p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-use-pallet" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L14">use-pallet</a></h3>
+            <h4 class="var-type macro" id="var-type">macro</h4>
+            <div class="usage">[]</div>
+            
+            
+            <div class="doc"><p>Macro that will use pallet's namespaces, to provide an easy to access REPL.</p>
+</div>
+          </div>
+        </div>
+      </div>
+    </article>
+  </body>
+
+</html>
