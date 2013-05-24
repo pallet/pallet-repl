@@ -2,6 +2,7 @@
   "A namespace that can be used to pull in most of pallet's namespaces.  uesful
   when working at the clojure REPL."
   (:require [pallet.core.data-api :as da]
+            [pallet.node :as node]
             [clojure.string :as string]
             [clojure.tools.logging :as log]
             [pallet.utils :refer [apply-map]])
@@ -31,7 +32,7 @@
     (print-table nodes)))
 
 (def node-table-cols
-  [:hostname :group-name :os-family :os-version :primary-ip
+  [:hostname :group-name :os-family :os-version :primary-ip :ssh-port :proxy-port
    :private-ip :terminated?])
 
 (defn show-nodes
@@ -68,6 +69,10 @@
 
 (defmacro with-indent [steps & body]
   `(prefix-text (indent-string ~steps)
+                (with-out-str ~@body)))
+
+(defmacro with-indent-prefix [steps prefix & body]
+  `(prefix-text (str (indent-string ~steps) ~prefix)
                 (with-out-str ~@body)))
 
 (defn- explain-action [{:keys [location action-type script language form
@@ -191,3 +196,109 @@ false` "
              (if-let [group-name (:group-name server-spec)]
                (merge {:group-name (name group-name)} options)
                options)))
+
+;;
+;; SESSION
+;;-------------------------------------------------------------
+
+;; (defn distinct-vals [maps key]
+;;   (reduce (fn [s m](conj s (key m))) #{} maps))
+
+;; (defn filter-by-kv [maps & kvs]
+;;   (let [matches?
+;;         (fn [m]
+;;           (every? true?
+;;                   (map (fn [[k v]] (= (k m) v))
+;;                        (partition 2 kvs))))]
+;;     (filter matches? maps)))
+
+;; (defn process-group-by [f maps k & [sorted-keys]]
+;;   (let [sorted-vals (or (first sorted-keys)
+;;                         (sort (distinct-vals maps (first k))))]
+;;     (into {}
+;;           (for [val sorted-vals]
+;;             [val (let [filtered-maps
+;;                        (filter-by-kv maps (first k) val)]
+;;                    (if (= 1 (count k))
+;;                      (mapcat f filtered-maps)
+;;                      (process-group-by f filtered-maps
+;;                                        (rest k) (rest sorted-keys))))]))))
+
+
+(defn explain-session
+  [{:keys [destroyed-nodes created-nodes runs] :as session}
+   & {:keys [show-detail] :or {show-detail true}}]
+  (let [;; check if the session has been serialized already or not
+        {:keys [destroyed-nodes created-nodes runs] :as session-data}
+        (if (:runs session) session (da/session-data session))
+        phases (da/phase-seq session-data)
+        groups (da/groups session-data)]
+    (when (seq? created-nodes)
+        (println "nodes created:" (count created-nodes))
+        (with-indent 2
+          (doseq [group groups]
+            (let [nodes (filter #(= group  (:group-name %)) created-nodes)]
+              (when (seq nodes)
+                (printf "group %s:\n" (name group))
+                (with-indent 2
+                  (doseq [node nodes]
+                    (printf "%s %s\n" (:primary-ip node) (:hostname node)))))))))
+    (when (seq? destroyed-nodes)
+        (println "nodes destroyed:" (count destroyed-nodes))
+        (with-indent 2
+          (doseq [group groups]
+            (let [nodes (filter #(= group  (:group-name %)) destroyed-nodes)]
+              (when (seq nodes)
+                (printf "group %s: %s\n" (name group) (count nodes))
+                (with-indent 2
+                  (doseq [node nodes]
+                    (printf "%s %s\n" (:primary-ip node) (:hostname node)))))))))
+    (println "phases invoked:" (apply str (interpose ", " (map name phases))))
+    (println "groups invoked:" (apply str (interpose ", " (map name groups))))
+    (println "actions run:")
+    (with-indent 2
+      (doseq [phase phases]
+        (printf "phase %s:\n" (name phase))
+        (with-indent 2
+          (doseq [group groups]
+            (printf "group %s:\n" (name group))
+            (with-indent 2
+              (doseq [run (filter #(and (= phase (:phase %))
+                                        (= group (:group-name %)))
+                                  runs)]
+                (if show-detail
+                  (do
+                    (printf "node %s:\n" (:primary-ip (:node run)))
+                    (with-indent 2
+                      (doseq [{:keys [script out exit error
+                                      action-num context summary]
+                               :as action}
+                              (map #(assoc % :action-num %2)
+                                   (:action-results run)
+                                   (range))]
+                        (printf "action #%s\n" (inc action-num))
+                        (with-indent 2
+                          (when context
+                            (printf "context: %s\n" context))
+                          (when summary
+                            (printf "summary: %s\n" summary))
+                          (println "script:")
+                          (with-indent-prefix 2 "| "
+                            (println script))
+                          (printf "exit: %s\n" exit)
+                          (println "output:")
+                          (with-indent-prefix 2 "| "
+                            (println out))
+                          (when-let [{:keys [type message out]} error]
+                            (println "ERROR:")
+                            (with-indent 2
+                              (printf "type: %s\n" type)
+                              (printf "message: %s\n" message)
+                              (printf "output: %s\n" out)))))))
+                  (let [errors (map :error (:action-results run))]
+                    (if (every? nil? errors)
+                      (printf "node %s: OK\n" (:primary-ip (:node run)))
+                      (printf "node %s: ERROR\n" (:primary-ip (:node run))))))))))))))
+
+(defn session-summary [s]
+  (explain-session s :show-detail false))
