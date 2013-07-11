@@ -236,13 +236,23 @@ parameter can be serialized or pure clojure.set
 
 The optional key parameter `:show-detail` controls whether detail on
 each action is to be shown or not. It defaults to `true`. When turned
-off, minimal OK/ERROR information will be presented for each node."
+off, minimal OK/ERROR information will be presented for each node.
+
+The optional key parameter `:show-internal-phases` will also print
+phases that are internal to pallet."
   [{:keys [destroyed-nodes created-nodes runs] :as session}
-   & {:keys [show-detail] :or {show-detail true}}]
+   & {:keys [show-detail show-internal-phases]
+      :or {show-detail true
+           show-internal-phases false}}]
   (let [ ;; check if the session has been serialized already or not
         {:keys [destroyed-nodes created-nodes runs] :as session-data}
         (if (:runs session) session (da/session-data session))
         phases (da/phase-seq session-data)
+        ;; remove internal-ish phases if show-internal-phases is false
+        phases (if show-internal-phases
+                 phases
+                 (remove #{:pallet/os} phases))
+        _ (println phases)
         groups (da/groups session-data)]
     (when (seq? created-nodes)
       (println "nodes created:" (count created-nodes))
