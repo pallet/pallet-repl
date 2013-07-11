@@ -302,5 +302,37 @@ off, minimal OK/ERROR information will be presented for each node."
                       (printf "NODE %s: OK\n" (:primary-ip (:node run)))
                       (printf "NODE %s: ERROR\n" (:primary-ip (:node run))))))))))))))
 
-(defn session-summary [s]
+(defn session-summary
+  "Provides a summary of the session execution, just indicating, for
+  each phase, which nodes ran OK vs. which ones got ERRORs."
+  [s]
   (explain-session s :show-detail false))
+
+(defn node-list-from-session
+  "Creates a node-list provider from a session. This node list
+  provider will only contain the nodes affected in the session. "
+  [s]
+  (let [nodes (map :node (:targets s))
+        node-vec (for [node nodes]
+                   [(node/hostname node)
+                    (node/group-name node)
+                    (node/primary-ip node)
+                    (node/os-family node)
+                    :os-version (node/os-version node)
+                    :is-64bit? (node/is-64bit? node)])]
+    (node-list-service node-vec)))
+
+
+(defn run-script
+  "Runs a script on a group or list of groups, and prints out the
+resulting session. It works better if you create a node-list first,
+maybe using node-list-from-sesison"
+  [compute groups script]
+  (let [s (api/lift groups
+                :compute compute
+                :phase (api/plan-fn
+                        (actions/exec-script* script))
+                :os-detect false)]
+    (explain-session s)))
+
+
