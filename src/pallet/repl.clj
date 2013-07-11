@@ -194,9 +194,10 @@ false` "
                      :print-branches print-branches)))
 
 (defn explain-phase
-  "Prints the action plan and corresponding shell scripts built as a result of
-executing a phase from the `server-spec`.  The `:configure` phase is explained
-by default. The phase can be specified with the `:phase` keyword.
+  "Prints the action plan and corresponding shell scripts built as a
+result of executing a phase from the `server-spec`. The `:configure`
+phase is explained by default. The phase can be specified with the
+`:phase` keyword.
 
   By default, the plan function is run against a mock node with
 this configuration:
