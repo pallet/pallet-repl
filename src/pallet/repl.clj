@@ -325,10 +325,19 @@ off, minimal OK/ERROR information will be presented for each node."
 
 (defn run-script
   "Runs a script on a group or list of groups, and prints out the
-resulting session. It works better if you create a node-list first,
-maybe using node-list-from-sesison"
-  [compute groups script]
-  (let [s (api/lift groups
+  resulting session.
+
+  If `compute-or-session` is a compute, it will work as a regular
+  lift/confgerge, but if it is a session, then it will only consider
+  the nodes in the session, and won't use the compute provider to find
+  these nodes, which should be faster"
+  [compute-or-session groups script]
+  (let [compute (if (some #{:targets} (keys compute-or-session))
+                  ; it's a session
+                  (node-list-from-session compute-or-session)
+                  ; nope, it's a compute
+                  compute-or-session)
+        s (api/lift groups
                 :compute compute
                 :phase (api/plan-fn
                         (actions/exec-script* script))
