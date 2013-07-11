@@ -36,14 +36,24 @@
     (print-table nodes)))
 
 (def node-table-cols
-  [:hostname :group-name :os-family :os-version :primary-ip :ssh-port :proxy-port
-   :private-ip :terminated?])
+  [:group-name :primary-ip :hostname :private-ip :os-family :os-version])
 
 (defn show-nodes
   "Prints a table with the information on all the nodes in a compute provider.
   The columns displayed can be modified by passing an optional `keys`
   vector containing the keys to display as columns (order is
-  significative)"
+  significative)
+
+  Valid keys are:
+    - `:hostname`
+    - `:group-name`
+    - `:os-family`
+    - `:os-version`
+    - `:primary-ip`
+    - `:ssh-port`
+    - `:proxy-port`
+    - `:private-ip`
+    - `:terminated?`"
   [compute & [keys]]
   (let [keys (or keys node-table-cols)
         nodes (da/nodes compute)]
