@@ -42,7 +42,7 @@ REPL.
   scripts corresponding to this plan. You can provide the os-family
   and os-version to target, which default to ubuntu 12.04. 
 
-```clojure
+  ```clojure
   (explain-plan 
       (api/plan-fn 
          (actions/remote-file "/tmp/hello_world"
@@ -366,7 +366,7 @@ REPL.
 
 - `session-summary` provides the final result of executing each phase on each node.
 
-  ```clojure
+   ```clojure
    (session-summary s)
    ```
    
