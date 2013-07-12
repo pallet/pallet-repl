@@ -252,7 +252,6 @@ phases that are internal to pallet."
         phases (if show-internal-phases
                  phases
                  (remove #{:pallet/os} phases))
-        _ (println phases)
         groups (da/groups session-data)]
     (when (seq? created-nodes)
       (println "nodes created:" (count created-nodes))
