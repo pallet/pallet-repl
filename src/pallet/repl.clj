@@ -2,9 +2,14 @@
   "A namespace that can be used to pull in most of pallet's namespaces.  uesful
   when working at the clojure REPL."
   (:require [pallet.core.data-api :as da]
+            [pallet.node :as node]
             [clojure.string :as string]
             [clojure.tools.logging :as log]
-            [pallet.utils :refer [apply-map]])
+            [pallet.utils :refer [apply-map]]
+            [pallet.compute.node-list :refer [node-list-service]]
+            [pallet.node :as node]
+            [pallet.api :as api]
+            [pallet.actions :as actions])
   (:use [clojure.pprint :only [print-table]]
         [clojure.pprint :only [pprint with-pprint-dispatch code-dispatch
                                print-table pprint-indent]]
@@ -31,14 +36,24 @@
     (print-table nodes)))
 
 (def node-table-cols
-  [:hostname :group-name :os-family :os-version :primary-ip
-   :private-ip :terminated?])
+  [:group-name :primary-ip :hostname :private-ip :os-family :os-version])
 
 (defn show-nodes
   "Prints a table with the information on all the nodes in a compute provider.
   The columns displayed can be modified by passing an optional `keys`
   vector containing the keys to display as columns (order is
-  significative)"
+  significative)
+
+  Valid keys are:
+    - `:hostname`
+    - `:group-name`
+    - `:os-family`
+    - `:os-version`
+    - `:primary-ip`
+    - `:ssh-port`
+    - `:proxy-port`
+    - `:private-ip`
+    - `:terminated?`"
   [compute & [keys]]
   (let [keys (or keys node-table-cols)
         nodes (da/nodes compute)]
@@ -70,6 +85,10 @@
   `(prefix-text (indent-string ~steps)
                 (with-out-str ~@body)))
 
+(defmacro with-indent-prefix [steps prefix & body]
+  `(prefix-text (str (indent-string ~steps) ~prefix)
+                (with-out-str ~@body)))
+
 (defn- explain-action [{:keys [location action-type script language form
                               script-dir script-prefix sudo-user blocks]
                        :as action}
@@ -88,33 +107,46 @@
                  (pprint form))))
    (when print-scripts
      (println "SCRIPT:")
-     (with-indent 2 (println (second script))))))
+     (with-indent-prefix 2 "| " (println (second script))))))
 
 (defn- explain-if-action [action level]
-  (println "IF" (first (-> action :action :args)) "THEN:"))
+  (let [[true-block false-block] (:blocks action)
+        is-true (first (:args action))]
+    (when (or (and is-true (seq true-block))
+              (and (not is-true) (seq false-block)))
+      (println "BRANCH"))))
 
-(defn- explain-actions [actions & {:keys [level print-scripts print-forms]}]
+(defn- explain-actions
+  [actions & {:keys [level print-scripts print-forms print-branches]}]
   (let [level (or level 0)]
-    (with-indent
-     2
-     (doseq [{:keys [location action-type script language form
-                     script-dir script-prefix sudo-user blocks] :as action}
-             actions
-             :when action]
-       (if (= action-type :flow/if)
-         (do (explain-if-action action level)
-             (when blocks
-               (when (first blocks)
-                 (explain-actions (first blocks) :level (inc level)
-                                  :print-scripts print-scripts
-                                  :print-forms print-forms))
-               (when-not (seq? (second blocks))
-                 (println "ELSE:")
-                 (explain-actions (second blocks) :level (inc level)
-                                  :print-scripts print-scripts
-                                  :print-forms print-forms))))
-         (do
-           (explain-action action level print-scripts print-forms)))))))
+    (doseq [{:keys [location action-type script language form
+                    script-dir script-prefix sudo-user blocks] :as action}
+            actions
+            :when action]
+      (if (= action-type :flow/if)
+        (when blocks
+          (let [test-val (first (:args action))
+                when?  (seq (first blocks))
+                run? (or (and when? test-val)
+                         (and (not when?) (not test-val)))]
+            (when (or run?
+                      (and (not run?) print-branches))
+              (if when?
+                (do
+                  (printf "WHEN %s %s:\n" test-val
+                          (if run? "" "(not executed)"))
+                  (with-indent 2
+                    (explain-actions (first blocks) :level (inc level)
+                                     :print-scripts print-scripts
+                                     :print-forms print-forms)))
+                (do
+                  (printf "WHEN NOT %s %s:" test-val
+                          (if run? "" "(not executed)"))
+                  (with-indent 2
+                    (explain-actions (second blocks) :level (inc level)
+                                     :print-scripts print-scripts
+                                     :print-forms print-forms)))))))
+        (explain-action action level print-scripts print-forms)))))
 
 (defn explain-plan
   "Prints the action plan and corresponding shell scripts built as a
@@ -138,8 +170,10 @@ scripts corresponding to those action forms will be shown, but you can
 disable them by passing `:print-scripts false` and/or `:print-forms
 false` "
   [pfn & {:keys [settings-phase print-scripts print-forms
+                 print-branches
                  node os-family os-version group-name]
           :or {print-scripts true
+               print-branches false
                print-forms true
                os-family :ubuntu
                group-name "mock-group"}}]
@@ -152,16 +186,18 @@ false` "
                  ["mock-node" group-name  "0.0.0.0" os-family
                   :os-version os-version])
         ;; echo what node we're about to use for the mock run
-        _ (do (print "Mock lift with node: ") (pprint node))
+        _ (do (print "NODE: ") (pprint node))
         actions (da/explain-plan pfn node :settings-phase settings-phase)]
     (explain-actions actions
                      :print-scripts print-scripts
-                     :print-forms print-forms)))
+                     :print-forms print-forms
+                     :print-branches print-branches)))
 
 (defn explain-phase
-  "Prints the action plan and corresponding shell scripts built as a result of
-executing a phase from the `server-spec`.  The `:configure` phase is explained
-by default. The phase can be specified with the `:phase` keyword.
+  "Prints the action plan and corresponding shell scripts built as a
+result of executing a phase from the `server-spec`. The `:configure`
+phase is explained by default. The phase can be specified with the
+`:phase` keyword.
 
   By default, the plan function is run against a mock node with
 this configuration:
@@ -179,11 +215,12 @@ scripts corresponding to those action forms will be shown, but you can
 disable them by passing `:print-scripts false` and/or `:print-forms
 false` "
   [server-spec & {:keys [phase print-scripts print-forms
-                        node os-family os-version]
-                 :or {print-scripts true
-                      print-forms true
-                      os-family :ubuntu
-                      phase :configure}
+                         print-branches node os-family os-version ]
+                  :or {print-scripts true
+                       print-forms true
+                       print-branches false
+                       os-family :ubuntu
+                       phase :configure}
                   :as options}]
   (apply-map explain-plan
              (-> server-spec :phases phase)
@@ -191,3 +228,140 @@ false` "
              (if-let [group-name (:group-name server-spec)]
                (merge {:group-name (name group-name)} options)
                options)))
+
+(defn explain-session
+  "Prints out detail of the actions executed in the context of the
+session, as well as possible infrastructure changes. The session
+parameter can be serialized or pure clojure.set
+
+The optional key parameter `:show-detail` controls whether detail on
+each action is to be shown or not. It defaults to `true`. When turned
+off, minimal OK/ERROR information will be presented for each node.
+
+The optional key parameter `:show-internal-phases` will also print
+phases that are internal to pallet."
+  [{:keys [destroyed-nodes created-nodes runs] :as session}
+   & {:keys [show-detail show-internal-phases]
+      :or {show-detail true
+           show-internal-phases false}}]
+  (let [ ;; check if the session has been serialized already or not
+        {:keys [destroyed-nodes created-nodes runs] :as session-data}
+        (if (:runs session) session (da/session-data session))
+        phases (da/phase-seq session-data)
+        ;; remove internal-ish phases if show-internal-phases is false
+        phases (if show-internal-phases
+                 phases
+                 (remove #{:pallet/os} phases))
+        groups (da/groups session-data)]
+    (when (seq? created-nodes)
+      (println "nodes created:" (count created-nodes))
+      (with-indent 2
+        (doseq [group groups]
+          (let [nodes (filter #(= group  (:group-name %)) created-nodes)]
+            (when (seq nodes)
+              (printf "group %s:\n" (name group))
+              (with-indent 2
+                (doseq [node nodes]
+                  (printf "%s %s\n" (:primary-ip node) (:hostname node)))))))))
+    (when (seq? destroyed-nodes)
+      (println "nodes destroyed:" (count destroyed-nodes))
+      (with-indent 2
+        (doseq [group groups]
+          (let [nodes (filter #(= group  (:group-name %)) destroyed-nodes)]
+            (when (seq nodes)
+              (printf "group %s: %s\n" (name group) (count nodes))
+              (with-indent 2
+                (doseq [node nodes]
+                  (printf "%s %s\n" (:primary-ip node) (:hostname node)))))))))
+    (println "PHASES:" (apply str (interpose ", " (map name phases))))
+    (println "GROUPS:" (apply str (interpose ", " (map name groups))))
+    (println "ACTIONS:")
+    (with-indent 2
+      (doseq [phase phases]
+        (printf "PHASE %s:\n" (name phase))
+        (with-indent 2
+          (doseq [group groups]
+            (printf "GROUP %s:\n" (name group))
+            (with-indent 2
+              (doseq [run (filter #(and (= phase (:phase %))
+                                        (= group (:group-name %)))
+                                  runs)]
+                (if show-detail
+                  (do
+                    (printf "NODE %s:\n" (:primary-ip (:node run)))
+                    (with-indent 2
+                      (doseq [{:keys [script out exit error
+                                      action-num context summary]
+                               :as action}
+                              (:action-results run)
+                              ]
+                        (if (nil? script)
+                          (println "LOCAL ACTION.")
+                          (do
+                            (println "ACTION ON NODE:")
+                            (with-indent 2
+                              (when context
+                                (printf "CONTEXT: %s\n" context))
+                              (when summary
+                                (printf "SUMMARY: %s\n" summary))
+                              (println "SCRIPT:")
+                              (with-indent-prefix 0 "| "
+                                (println script))
+                              (printf "EXIT CODE: %s\n" exit)
+                              (println "OUTPUT:")
+                              (with-indent-prefix 0 "| "
+                                (println out))
+                              (when-let [{:keys [type message out]} error]
+                                (println "ERROR:")
+                                (with-indent 2
+                                  (printf "TYPE: %s\n" type)
+                                  (printf "MESSAGE: %s\n" message)
+                                  (printf "OUTPUT: %s\n" out)))))))))
+                  (let [errors (map :error (:action-results run))]
+                    (if (every? nil? errors)
+                      (printf "NODE %s: OK\n" (:primary-ip (:node run)))
+                      (printf "NODE %s: ERROR\n" (:primary-ip (:node run))))))))))))))
+
+(defn session-summary
+  "Provides a summary of the session execution, just indicating, for
+  each phase, which nodes ran OK vs. which ones got ERRORs."
+  [s]
+  (explain-session s :show-detail false))
+
+(defn node-list-from-session
+  "Creates a node-list provider from a session. This node list
+  provider will only contain the nodes affected in the session. "
+  [s]
+  (let [nodes (map :node (:targets s))
+        node-vec (for [node nodes]
+                   [(node/hostname node)
+                    (node/group-name node)
+                    (node/primary-ip node)
+                    (node/os-family node)
+                    :os-version (node/os-version node)
+                    :is-64bit? (node/is-64bit? node)])]
+    (node-list-service node-vec)))
+
+
+(defn run-script
+  "Runs a script on a group or list of groups, and prints out the
+  resulting session.
+
+  If `compute-or-session` is a compute, it will work as a regular
+  lift/confgerge, but if it is a session, then it will only consider
+  the nodes in the session, and won't use the compute provider to find
+  these nodes, which should be faster"
+  [compute-or-session groups script]
+  (let [compute (if (some #{:targets} (keys compute-or-session))
+                  ; it's a session
+                  (node-list-from-session compute-or-session)
+                  ; nope, it's a compute
+                  compute-or-session)
+        s (api/lift groups
+                :compute compute
+                :phase (api/plan-fn
+                        (actions/exec-script* script))
+                :os-detect false)]
+    (explain-session s)))
+
+
