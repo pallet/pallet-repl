@@ -3028,14 +3028,19 @@ net.brehaut.ClojureTools = (function (SH) {
     build_tree: build_tree
   };
 })(SyntaxHighlighter);
-</script><title>com.palletops/pallet-repl -- Marginalia</title></head><body><table><tr><td class="docs"><div class="header"><h1 class="project-name">com.palletops/pallet-repl</h1><h2 class="project-version">0.8.0-SNAPSHOT</h2><br /><p>Pallet REPL utilities</p>
-</div><div class="dependencies"><h3>dependencies</h3><table><tr><td class="dep-name">org.clojure/clojure</td><td class="dotted"><hr /></td><td class="dep-version">1.4.0</td></tr><tr><td class="dep-name">com.palletops/pallet</td><td class="dotted"><hr /></td><td class="dep-version">0.8.0-SNAPSHOT</td></tr></table></div></td><td class="codes" style="text-align: center; vertical-align: middle;color: #666;padding-right:20px"><br /><br /><br />(this space intentionally left almost blank)</td></tr><tr><td class="docs"><div class="toc"><a name="toc"><h3>namespaces</h3></a><ul><li><a href="#pallet.repl">pallet.repl</a></li></ul></div></td><td class="codes">&nbsp;</td></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#pallet.repl" name="pallet.repl"><h1 class="project-name">pallet.repl</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>A namespace that can be used to pull in most of pallet's namespaces.  uesful
+</script><title>com.palletops/pallet-repl -- Marginalia</title></head><body><table><tr><td class="docs"><div class="header"><h1 class="project-name">com.palletops/pallet-repl</h1><h2 class="project-version">0.8.0-beta.2</h2><br /><p>Pallet REPL utilities</p>
+</div><div class="dependencies"><h3>dependencies</h3><table><tr><td class="dep-name">org.clojure/clojure</td><td class="dotted"><hr /></td><td class="dep-version">1.4.0</td></tr><tr><td class="dep-name">com.palletops/pallet</td><td class="dotted"><hr /></td><td class="dep-version">0.8.0-RC.1</td></tr></table></div></td><td class="codes" style="text-align: center; vertical-align: middle;color: #666;padding-right:20px"><br /><br /><br />(this space intentionally left almost blank)</td></tr><tr><td class="docs"><div class="toc"><a name="toc"><h3>namespaces</h3></a><ul><li><a href="#pallet.repl">pallet.repl</a></li></ul></div></td><td class="codes">&nbsp;</td></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#pallet.repl" name="pallet.repl"><h1 class="project-name">pallet.repl</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs"><p>A namespace that can be used to pull in most of pallet's namespaces.  uesful
   when working at the clojure REPL.</p>
 </td><td class="codes"><pre class="brush: clojure">(ns pallet.repl
   (:require [pallet.core.data-api :as da]
+            [pallet.node :as node]
             [clojure.string :as string]
             [clojure.tools.logging :as log]
-            [pallet.utils :refer [apply-map]])
+            [pallet.utils :refer [apply-map]]
+            [pallet.compute.node-list :refer [node-list-service]]
+            [pallet.node :as node]
+            [pallet.api :as api]
+            [pallet.actions :as actions])
   (:use [clojure.pprint :only [print-table]]
         [clojure.pprint :only [pprint with-pprint-dispatch code-dispatch
                                print-table pprint-indent]]
@@ -3057,11 +3062,21 @@ net.brehaut.ClojureTools = (function (SH) {
     (print-table keys nodes)
     (print-table nodes)))</pre></td></tr><tr><td class="docs">
 </td><td class="codes"><pre class="brush: clojure">(def node-table-cols
-  [:hostname :group-name :os-family :os-version :primary-ip
-   :private-ip :terminated?])</pre></td></tr><tr><td class="docs"><p>Prints a table with the information on all the nodes in a compute provider.
+  [:group-name :primary-ip :hostname :private-ip :os-family :os-version])</pre></td></tr><tr><td class="docs"><p>Prints a table with the information on all the nodes in a compute provider.
   The columns displayed can be modified by passing an optional <code>keys</code>
   vector containing the keys to display as columns (order is
   significative)</p>
+
+<p>  Valid keys are:
+    - <code>:hostname</code>
+    - <code>:group-name</code>
+    - <code>:os-family</code>
+    - <code>:os-version</code>
+    - <code>:primary-ip</code>
+    - <code>:ssh-port</code>
+    - <code>:proxy-port</code>
+    - <code>:private-ip</code>
+    - <code>:terminated?</code></p>
 </td><td class="codes"><pre class="brush: clojure">(defn show-nodes
   [compute &amp; [keys]]
   (let [keys (or keys node-table-cols)
@@ -3088,6 +3103,9 @@ net.brehaut.ClojureTools = (function (SH) {
 </td><td class="codes"><pre class="brush: clojure">(defmacro with-indent [steps &amp; body]
   `(prefix-text (indent-string ~steps)
                 (with-out-str ~@body)))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defmacro with-indent-prefix [steps prefix &amp; body]
+  `(prefix-text (str (indent-string ~steps) ~prefix)
+                (with-out-str ~@body)))</pre></td></tr><tr><td class="docs">
 </td><td class="codes"><pre class="brush: clojure">(defn- explain-action [{:keys [location action-type script language form
                               script-dir script-prefix sudo-user blocks]
                        :as action}
@@ -3106,31 +3124,44 @@ net.brehaut.ClojureTools = (function (SH) {
                  (pprint form))))
    (when print-scripts
      (println &quot;SCRIPT:&quot;)
-     (with-indent 2 (println (second script))))))</pre></td></tr><tr><td class="docs">
+     (with-indent-prefix 2 &quot;| &quot; (println (second script))))))</pre></td></tr><tr><td class="docs">
 </td><td class="codes"><pre class="brush: clojure">(defn- explain-if-action [action level]
-  (println &quot;IF&quot; (first (-&gt; action :action :args)) &quot;THEN:&quot;))</pre></td></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(defn- explain-actions [actions &amp; {:keys [level print-scripts print-forms]}]
+  (let [[true-block false-block] (:blocks action)
+        is-true (first (:args action))]
+    (when (or (and is-true (seq true-block))
+              (and (not is-true) (seq false-block)))
+      (println &quot;BRANCH&quot;))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- explain-actions
+  [actions &amp; {:keys [level print-scripts print-forms print-branches]}]
   (let [level (or level 0)]
-    (with-indent
-     2
-     (doseq [{:keys [location action-type script language form
-                     script-dir script-prefix sudo-user blocks] :as action}
-             actions
-             :when action]
-       (if (= action-type :flow/if)
-         (do (explain-if-action action level)
-             (when blocks
-               (when (first blocks)
-                 (explain-actions (first blocks) :level (inc level)
-                                  :print-scripts print-scripts
-                                  :print-forms print-forms))
-               (when-not (seq? (second blocks))
-                 (println &quot;ELSE:&quot;)
-                 (explain-actions (second blocks) :level (inc level)
-                                  :print-scripts print-scripts
-                                  :print-forms print-forms))))
-         (do
-           (explain-action action level print-scripts print-forms)))))))</pre></td></tr><tr><td class="docs"><p>Prints the action plan and corresponding shell scripts built as a
+    (doseq [{:keys [location action-type script language form
+                    script-dir script-prefix sudo-user blocks] :as action}
+            actions
+            :when action]
+      (if (= action-type :flow/if)
+        (when blocks
+          (let [test-val (first (:args action))
+                when?  (seq (first blocks))
+                run? (or (and when? test-val)
+                         (and (not when?) (not test-val)))]
+            (when (or run?
+                      (and (not run?) print-branches))
+              (if when?
+                (do
+                  (printf &quot;WHEN %s %s:\n&quot; test-val
+                          (if run?  &quot;(not executed)&quot;))
+                  (with-indent 2
+                    (explain-actions (first blocks) :level (inc level)
+                                     :print-scripts print-scripts
+                                     :print-forms print-forms)))
+                (do
+                  (printf &quot;WHEN NOT %s %s:&quot; test-val
+                          (if run?  &quot;(not executed)&quot;))
+                  (with-indent 2
+                    (explain-actions (second blocks) :level (inc level)
+                                     :print-scripts print-scripts
+                                     :print-forms print-forms)))))))
+        (explain-action action level print-scripts print-forms)))))</pre></td></tr><tr><td class="docs"><p>Prints the action plan and corresponding shell scripts built as a
 result of executing a plan function <code>pfn</code>. If the plan function
 requires settings to be set, adding the settings function call to
 <code>:settings-phase</code></p>
@@ -3153,8 +3184,10 @@ disable them by passing <code>:print-scripts false</code> and/or `:print-forms
 false` </p>
 </td><td class="codes"><pre class="brush: clojure">(defn explain-plan
   [pfn &amp; {:keys [settings-phase print-scripts print-forms
+                 print-branches
                  node os-family os-version group-name]
           :or {print-scripts true
+               print-branches false
                print-forms true
                os-family :ubuntu
                group-name &quot;mock-group&quot;}}]
@@ -3167,13 +3200,15 @@ false` </p>
                  [&quot;mock-node&quot; group-name  &quot;0.0.0.0&quot; os-family
                   :os-version os-version])
         ;; echo what node we're about to use for the mock run
-        _ (do (print &quot;Mock lift with node: &quot;) (pprint node))
+        _ (do (print &quot;NODE: &quot;) (pprint node))
         actions (da/explain-plan pfn node :settings-phase settings-phase)]
     (explain-actions actions
                      :print-scripts print-scripts
-                     :print-forms print-forms)))</pre></td></tr><tr><td class="docs"><p>Prints the action plan and corresponding shell scripts built as a result of
-executing a phase from the <code>server-spec</code>.  The <code>:configure</code> phase is explained
-by default. The phase can be specified with the <code>:phase</code> keyword.</p>
+                     :print-forms print-forms
+                     :print-branches print-branches)))</pre></td></tr><tr><td class="docs"><p>Prints the action plan and corresponding shell scripts built as a
+result of executing a phase from the <code>server-spec</code>. The <code>:configure</code>
+phase is explained by default. The phase can be specified with the
+<code>:phase</code> keyword.</p>
 
 <p>  By default, the plan function is run against a mock node with
 this configuration:</p>
@@ -3193,16 +3228,143 @@ disable them by passing <code>:print-scripts false</code> and/or `:print-forms
 false` </p>
 </td><td class="codes"><pre class="brush: clojure">(defn explain-phase
   [server-spec &amp; {:keys [phase print-scripts print-forms
-                        node os-family os-version]
-                 :or {print-scripts true
-                      print-forms true
-                      os-family :ubuntu
-                      phase :configure}
+                         print-branches node os-family os-version ]
+                  :or {print-scripts true
+                       print-forms true
+                       print-branches false
+                       os-family :ubuntu
+                       phase :configure}
                   :as options}]
   (apply-map explain-plan
              (-&gt; server-spec :phases phase)
              :settings-phase (-&gt; server-spec :phases :settings)
              (if-let [group-name (:group-name server-spec)]
                (merge {:group-name (name group-name)} options)
-               options)))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr></table><div class="footer">Generated by <a href="https://github.com/fogus/marginalia">Marginalia</a>.&nbsp;&nbsp;Syntax highlighting provided by Alex Gorbatchev's <a href="http://alexgorbatchev.com/SyntaxHighlighter/">SyntaxHighlighter</a></div><script type="text/javascript">SyntaxHighlighter.defaults['gutter'] = false;
+               options)))</pre></td></tr><tr><td class="docs"><p>Prints out detail of the actions executed in the context of the
+session, as well as possible infrastructure changes. The session
+parameter can be serialized or pure clojure.set</p>
+
+<p>The optional key parameter <code>:show-detail</code> controls whether detail on
+each action is to be shown or not. It defaults to <code>true</code>. When turned
+off, minimal OK/ERROR information will be presented for each node.</p>
+
+<p>The optional key parameter <code>:show-internal-phases</code> will also print
+phases that are internal to pallet.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn explain-session
+  [{:keys [destroyed-nodes created-nodes runs] :as session}
+   &amp; {:keys [show-detail show-internal-phases]
+      :or {show-detail true
+           show-internal-phases false}}]
+  (let [ ;; check if the session has been serialized already or not
+        {:keys [destroyed-nodes created-nodes runs] :as session-data}
+        (if (:runs session) session (da/session-data session))
+        phases (da/phase-seq session-data)
+        ;; remove internal-ish phases if show-internal-phases is false
+        phases (if show-internal-phases
+                 phases
+                 (remove #{:pallet/os} phases))
+        groups (da/groups session-data)]
+    (when (seq? created-nodes)
+      (println &quot;nodes created:&quot; (count created-nodes))
+      (with-indent 2
+        (doseq [group groups]
+          (let [nodes (filter #(= group  (:group-name %)) created-nodes)]
+            (when (seq nodes)
+              (printf &quot;group %s:\n&quot; (name group))
+              (with-indent 2
+                (doseq [node nodes]
+                  (printf &quot;%s %s\n&quot; (:primary-ip node) (:hostname node)))))))))
+    (when (seq? destroyed-nodes)
+      (println &quot;nodes destroyed:&quot; (count destroyed-nodes))
+      (with-indent 2
+        (doseq [group groups]
+          (let [nodes (filter #(= group  (:group-name %)) destroyed-nodes)]
+            (when (seq nodes)
+              (printf &quot;group %s: %s\n&quot; (name group) (count nodes))
+              (with-indent 2
+                (doseq [node nodes]
+                  (printf &quot;%s %s\n&quot; (:primary-ip node) (:hostname node)))))))))
+    (println &quot;PHASES:&quot; (apply str (interpose &quot;, &quot; (map name phases))))
+    (println &quot;GROUPS:&quot; (apply str (interpose &quot;, &quot; (map name groups))))
+    (println &quot;ACTIONS:&quot;)
+    (with-indent 2
+      (doseq [phase phases]
+        (printf &quot;PHASE %s:\n&quot; (name phase))
+        (with-indent 2
+          (doseq [group groups]
+            (printf &quot;GROUP %s:\n&quot; (name group))
+            (with-indent 2
+              (doseq [run (filter #(and (= phase (:phase %))
+                                        (= group (:group-name %)))
+                                  runs)]
+                (if show-detail
+                  (do
+                    (printf &quot;NODE %s:\n&quot; (:primary-ip (:node run)))
+                    (with-indent 2
+                      (doseq [{:keys [script out exit error
+                                      action-num context summary]
+                               :as action}
+                              (:action-results run)
+                              ]
+                        (if (nil? script)
+                          (println &quot;LOCAL ACTION.&quot;)
+                          (do
+                            (println &quot;ACTION ON NODE:&quot;)
+                            (with-indent 2
+                              (when context
+                                (printf &quot;CONTEXT: %s\n&quot; context))
+                              (when summary
+                                (printf &quot;SUMMARY: %s\n&quot; summary))
+                              (println &quot;SCRIPT:&quot;)
+                              (with-indent-prefix 0 &quot;| &quot;
+                                (println script))
+                              (printf &quot;EXIT CODE: %s\n&quot; exit)
+                              (println &quot;OUTPUT:&quot;)
+                              (with-indent-prefix 0 &quot;| &quot;
+                                (println out))
+                              (when-let [{:keys [type message out]} error]
+                                (println &quot;ERROR:&quot;)
+                                (with-indent 2
+                                  (printf &quot;TYPE: %s\n&quot; type)
+                                  (printf &quot;MESSAGE: %s\n&quot; message)
+                                  (printf &quot;OUTPUT: %s\n&quot; out)))))))))
+                  (let [errors (map :error (:action-results run))]
+                    (if (every? nil? errors)
+                      (printf &quot;NODE %s: OK\n&quot; (:primary-ip (:node run)))
+                      (printf &quot;NODE %s: ERROR\n&quot; (:primary-ip (:node run))))))))))))))</pre></td></tr><tr><td class="docs"><p>Provides a summary of the session execution, just indicating, for
+  each phase, which nodes ran OK vs. which ones got ERRORs.</p>
+</td><td class="codes"><pre class="brush: clojure">(defn session-summary
+  [s]
+  (explain-session s :show-detail false))</pre></td></tr><tr><td class="docs"><p>Creates a node-list provider from a session. This node list
+  provider will only contain the nodes affected in the session. </p>
+</td><td class="codes"><pre class="brush: clojure">(defn node-list-from-session
+  [s]
+  (let [nodes (map :node (:targets s))
+        node-vec (for [node nodes]
+                   [(node/hostname node)
+                    (node/group-name node)
+                    (node/primary-ip node)
+                    (node/os-family node)
+                    :os-version (node/os-version node)
+                    :is-64bit? (node/is-64bit? node)])]
+    (node-list-service node-vec)))</pre></td></tr><tr><td class="docs"><p>Runs a script on a group or list of groups, and prints out the
+  resulting session.</p>
+
+<p>  If <code>compute-or-session</code> is a compute, it will work as a regular
+  lift/confgerge, but if it is a session, then it will only consider
+  the nodes in the session, and won't use the compute provider to find
+  these nodes, which should be faster</p>
+</td><td class="codes"><pre class="brush: clojure">(defn run-script
+  [compute-or-session groups script]
+  (let [compute (if (some #{:targets} (keys compute-or-session))
+                  ; it's a session
+                  (node-list-from-session compute-or-session)
+                  ; nope, it's a compute
+                  compute-or-session)
+        s (api/lift groups
+                :compute compute
+                :phase (api/plan-fn
+                        (actions/exec-script* script))
+                :os-detect false)]
+    (explain-session s)))</pre></td></tr><tr><td class="spacer docs">&nbsp;</td><td class="codes" /></tr></table><div class="footer">Generated by <a href="https://github.com/fogus/marginalia">Marginalia</a>.&nbsp;&nbsp;Syntax highlighting provided by Alex Gorbatchev's <a href="http://alexgorbatchev.com/SyntaxHighlighter/">SyntaxHighlighter</a></div><script type="text/javascript">SyntaxHighlighter.defaults['gutter'] = false;
        SyntaxHighlighter.all()</script></body></html>

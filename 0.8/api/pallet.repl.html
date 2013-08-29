@@ -29,7 +29,7 @@
       </div>
     </div>
       <div id="header">
-        <h1><a href="http://palletops.com"><span class="project-title">Pallet-repl 0.8.0-SNAPSHOT API documentation</span></a></h1>
+        <h1><a href="http://palletops.com"><span class="project-title">Pallet-repl 0.8.0-beta.2 API documentation</span></a></h1>
       </div>
     </header>
     <navigation>
@@ -42,7 +42,7 @@
       <div id="vars" class="sidebar">
         <h3>Public Vars</h3>
         <ul class="ns-var-links">
-          <li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-explain-phase">explain-phase</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-explain-plan">explain-plan</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-show-group">show-group</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-show-nodes">show-nodes</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-show-nodes*">show-nodes*</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-use-pallet">use-pallet</a></li>
+          <li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-explain-phase">explain-phase</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-explain-plan">explain-plan</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-explain-session">explain-session</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-node-list-from-session">node-list-from-session</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-run-script">run-script</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-session-summary">session-summary</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-show-group">show-group</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-show-nodes">show-nodes</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-show-nodes*">show-nodes*</a></li><li class="ns-var-list"><a class="ns-var-link ns-var-name" href="pallet.repl.html#var-use-pallet">use-pallet</a></li>
         </ul>
       </div>
     </navigation>
@@ -54,14 +54,15 @@ when working at the clojure REPL.</p>
 </div>
         <div class="ns-vars">
           <div class="public">
-            <h3><a id="var-explain-phase" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L161">explain-phase</a></h3>
+            <h3><a id="var-explain-phase" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L196">explain-phase</a></h3>
             <h4 class="var-type fn" id="var-type">fn</h4>
-            <div class="usage">[server-spec &amp; {:keys [phase print-scripts print-forms node os-family os-version], :or {print-scripts true, print-forms true, os-family :ubuntu, phase :configure}, :as options}]</div>
+            <div class="usage">[server-spec &amp; {:keys [phase print-scripts print-forms print-branches node os-family os-version], :or {print-scripts true, print-forms true, print-branches false, os-family :ubuntu, phase :configure}, :as options}]</div>
             
             
-            <div class="doc"><p>Prints the action plan and corresponding shell scripts built as a result of
-executing a phase from the <code>server-spec</code>.  The <code>:configure</code> phase is explained
-by default. The phase can be specified with the <code>:phase</code> keyword.</p>
+            <div class="doc"><p>Prints the action plan and corresponding shell scripts built as a
+result of executing a phase from the <code>server-spec</code>. The <code>:configure</code>
+phase is explained by default. The phase can be specified with the
+<code>:phase</code> keyword.</p>
 
 <p>  By default, the plan function is run against a mock node with
 this configuration:</p>
@@ -81,9 +82,9 @@ disable them by passing <code>:print-scripts false</code> and/or `:print-forms
 false` </p>
 </div>
           </div><div class="public">
-            <h3><a id="var-explain-plan" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L119">explain-plan</a></h3>
+            <h3><a id="var-explain-plan" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L151">explain-plan</a></h3>
             <h4 class="var-type fn" id="var-type">fn</h4>
-            <div class="usage">[pfn &amp; {:keys [settings-phase print-scripts print-forms node os-family os-version group-name], :or {print-scripts true, print-forms true, os-family :ubuntu, group-name "mock-group"}}]</div>
+            <div class="usage">[pfn &amp; {:keys [settings-phase print-scripts print-forms print-branches node os-family os-version group-name], :or {print-scripts true, print-branches false, print-forms true, os-family :ubuntu, group-name "mock-group"}}]</div>
             
             
             <div class="doc"><p>Prints the action plan and corresponding shell scripts built as a
@@ -109,7 +110,56 @@ disable them by passing <code>:print-scripts false</code> and/or `:print-forms
 false` </p>
 </div>
           </div><div class="public">
-            <h3><a id="var-show-group" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L47">show-group</a></h3>
+            <h3><a id="var-explain-session" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L232">explain-session</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[{:keys [destroyed-nodes created-nodes runs], :as session} &amp; {:keys [show-detail show-internal-phases], :or {show-detail true, show-internal-phases false}}]</div>
+            
+            
+            <div class="doc"><p>Prints out detail of the actions executed in the context of the
+session, as well as possible infrastructure changes. The session
+parameter can be serialized or pure clojure.set</p>
+
+<p>The optional key parameter <code>:show-detail</code> controls whether detail on
+each action is to be shown or not. It defaults to <code>true</code>. When turned
+off, minimal OK/ERROR information will be presented for each node.</p>
+
+<p>The optional key parameter <code>:show-internal-phases</code> will also print
+phases that are internal to pallet.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-node-list-from-session" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L331">node-list-from-session</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[s]</div>
+            
+            
+            <div class="doc"><p>Creates a node-list provider from a session. This node list
+provider will only contain the nodes affected in the session. </p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-run-script" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L346">run-script</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[compute-or-session groups script]</div>
+            
+            
+            <div class="doc"><p>Runs a script on a group or list of groups, and prints out the
+resulting session.</p>
+
+<p>If <code>compute-or-session</code> is a compute, it will work as a regular
+lift/confgerge, but if it is a session, then it will only consider
+the nodes in the session, and won't use the compute provider to find
+these nodes, which should be faster</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-session-summary" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L325">session-summary</a></h3>
+            <h4 class="var-type fn" id="var-type">fn</h4>
+            <div class="usage">[s]</div>
+            
+            
+            <div class="doc"><p>Provides a summary of the session execution, just indicating, for
+each phase, which nodes ran OK vs. which ones got ERRORs.</p>
+</div>
+          </div><div class="public">
+            <h3><a id="var-show-group" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L62">show-group</a></h3>
             <h4 class="var-type fn" id="var-type">fn</h4>
             <div class="usage">[compute group-name &amp; keys]</div>
             
@@ -121,7 +171,7 @@ optional <code>keys</code> vector containing the keys to display as
 columns (order is significative)</p>
 </div>
           </div><div class="public">
-            <h3><a id="var-show-nodes" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L37">show-nodes</a></h3>
+            <h3><a id="var-show-nodes" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L41">show-nodes</a></h3>
             <h4 class="var-type fn" id="var-type">fn</h4>
             <div class="usage">[compute &amp; [keys]]</div>
             
@@ -130,9 +180,20 @@ columns (order is significative)</p>
 The columns displayed can be modified by passing an optional <code>keys</code>
 vector containing the keys to display as columns (order is
 significative)</p>
+
+<p>Valid keys are:
+  - <code>:hostname</code>
+  - <code>:group-name</code>
+  - <code>:os-family</code>
+  - <code>:os-version</code>
+  - <code>:primary-ip</code>
+  - <code>:ssh-port</code>
+  - <code>:proxy-port</code>
+  - <code>:private-ip</code>
+  - <code>:terminated?</code></p>
 </div>
           </div><div class="public">
-            <h3><a id="var-show-nodes*" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L24">show-nodes*</a></h3>
+            <h3><a id="var-show-nodes*" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L29">show-nodes*</a></h3>
             <h4 class="var-type fn" id="var-type">fn</h4>
             <div class="usage">[nodes &amp; [keys]]</div>
             
@@ -142,7 +203,7 @@ table and their order can be modified by passing a vector with all
 the keys in <code>keys</code></p>
 </div>
           </div><div class="public">
-            <h3><a id="var-use-pallet" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L14">use-pallet</a></h3>
+            <h3><a id="var-use-pallet" class="source var-name" href="https://github.com/pallet/pallet-repl/blob/develop/src/pallet/repl.clj#L19">use-pallet</a></h3>
             <h4 class="var-type macro" id="var-type">macro</h4>
             <div class="usage">[]</div>
             
