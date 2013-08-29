@@ -12,7 +12,7 @@ REPL.
 ## Usage
 
 ```clj
-[com.palletops/pallet-repl "0.8.0-beta.1"]
+[com.palletops/pallet-repl "0.8.0-beta.2"]
 ```
 
 ## Features
