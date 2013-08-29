@@ -1,4 +1,4 @@
-(defproject com.palletops/pallet-repl "0.8.0-beta.2"
+(defproject com.palletops/pallet-repl "0.8.0-SNAPSHOT"
   :description "Pallet REPL utilities"
   :url "http://palletops.com/"
   :license {:name "Eclipse Public License"
