@@ -2,6 +2,8 @@
   "A namespace that can be used to pull in most of pallet's namespaces.  uesful
   when working at the clojure REPL."
   (:require [pallet.core.data-api :as da]
+            [pallet.crate.automated-admin-user
+             :refer [with-automated-admin-user]]
             [pallet.node :as node]
             [clojure.string :as string]
             [clojure.tools.logging :as log]
@@ -10,8 +12,7 @@
             [pallet.node :as node]
             [pallet.api :as api]
             [pallet.actions :as actions])
-  (:use [clojure.pprint :only [print-table]]
-        [clojure.pprint :only [pprint with-pprint-dispatch code-dispatch
+  (:use [clojure.pprint :only [pprint with-pprint-dispatch code-dispatch
                                print-table pprint-indent]]
         [clojure.walk :only [prewalk]]
         [pallet.stevedore :only (with-source-line-comments)]))
@@ -94,7 +95,7 @@
                        :as action}
                       level & [ print-scripts print-forms]]
   (println "ACTION:" (-> action :action :action-symbol)
-           "of type" (name action-type)
+           "of type" (when type (name action-type))
            "executed on" (name location))
   (with-indent
    2
@@ -148,6 +149,27 @@
                                      :print-forms print-forms)))))))
         (explain-action action level print-scripts print-forms)))))
 
+(defn settings-for-node-id [s node-id]
+  (let [settings (-> s :plan-state :host)]
+    (get settings node-id)))
+
+(defn print-session-settings
+  "Prints the settings for a session with one node. If the session
+  contains more than one node then only the first one will be used."
+  [s]
+  ;; this assumes just one node. Will need to be made more robust if
+  ;; support for more than one node are used
+  (let [{:keys [targets plan-state]} s
+        settings (:host plan-state)]
+    (println "SESSION:" )
+    (doseq [{:keys [node group-name] :as target} targets]
+      (let [node-id (node/id node)
+            node-ip (node/primary-ip node)
+            node-name (node/hostname node)
+            node-settings (get settings node-id)]
+        (printf "NODE: %s IP: %s GROUP: %s\n" node-name node-ip group-name)
+        (println (with-out-str (pprint node-settings)))))))
+
 (defn explain-plan
   "Prints the action plan and corresponding shell scripts built as a
 result of executing a plan function `pfn`. If the plan function
@@ -168,30 +190,73 @@ specify `:node` then `:os-family` and `:os-version` are ignored.
 By default, both the generated action forms (clojure forms) and the
 scripts corresponding to those action forms will be shown, but you can
 disable them by passing `:print-scripts false` and/or `:print-forms
-false` "
+false`
+
+Also, by default the settings for the node before and after the
+execution of the plan function are not snowed, but passing either/or
+`:print-settings-before` and `:print-settings-after` as true will
+activate the priting of those settings.
+
+Passing an existing session as `:session` to this function will run
+this session as a continuation of the existing session. This allows
+for testing what would happen on real scenarios. This session must
+contain only one node, and if it contains more than one, only the
+first node will be used. When passing a session, the `:node` option
+will be ignored and a node from the session will be used instead.
+"
   [pfn & {:keys [settings-phase print-scripts print-forms
                  print-branches
-                 node os-family os-version group-name]
+                 node os-family os-version group-name
+                 session print-settings-before print-settings-after]
           :or {print-scripts true
                print-branches false
                print-forms true
                os-family :ubuntu
-               group-name "mock-group"}}]
+               group-name "mock-group"
+               session {}
+               print-settings-before false
+               print-settings-after false}}]
   (let [os-version (or os-version
                        (os-family {:ubuntu "12.04"
                                    :centos "6.3"
                                    :debian "6.0"
                                    :rhel "6.1"}))
-        node (or node
+        ;; if there is a session, we create a node matching the one in
+        ;; the session, so we can continue its session
+        node-from-plan-state
+        (when session
+          (let [node (-> session :targets first :node)]
+            (when print-settings-before
+              (println "SETTINGS BEFORE:")
+              (pprint (settings-for-node-id session (node/id node))))
+            [(node/hostname node)
+             (node/group-name node)
+             (node/primary-ip node)
+             (node/os-family node)
+             :os-version
+             (node/os-version node)
+             :id (node/id node)]))
+        ;; Use the node from the session if exists, then a supplied
+        ;; one, or the default if all else fails
+        node (or node-from-plan-state
+                 node
                  ["mock-node" group-name  "0.0.0.0" os-family
                   :os-version os-version])
         ;; echo what node we're about to use for the mock run
-        _ (do (print "NODE: ") (pprint node))
-        actions (da/explain-plan pfn node :settings-phase settings-phase)]
+        _ (println "NODE:" node)
+        {:keys [actions session]}
+        (da/explain-plan pfn node
+                         :settings-phase settings-phase
+                         :plan-state (when session
+                                       (:plan-state session)))
+        node (-> session :targets first :node)]
     (explain-actions actions
                      :print-scripts print-scripts
                      :print-forms print-forms
-                     :print-branches print-branches)))
+                     :print-branches print-branches)
+    (when print-settings-after
+      (println "SETTINGS AFTER: " (node/id node))
+      (pprint (settings-for-node-id session (node/id node))))))
 
 (defn explain-phase
   "Prints the action plan and corresponding shell scripts built as a
@@ -342,7 +407,6 @@ phases that are internal to pallet."
                     :is-64bit? (node/is-64bit? node)])]
     (node-list-service node-vec)))
 
-
 (defn run-script
   "Runs a script on a group or list of groups, and prints out the
   resulting session.
@@ -365,3 +429,86 @@ phases that are internal to pallet."
     (explain-session s)))
 
 
+;;;; step-wise lift and explain-session
+(defonce repl-session (atom {}))
+(defonce repl-compute (atom nil))
+(defonce repl-node-list (atom nil))
+(defonce repl-options (atom {}))
+
+
+(defn start-repl-session
+  "Starts a repl session on the `compute` service with a node that
+  conforms the nodee-specs provided by `n-spec`"
+  [compute n-spec]
+  (let [group (api/group-spec "repl-session"
+                :node-spec (apply-map api/node-spec n-spec)
+                :extends [with-automated-admin-user])
+        s (api/converge {group 1}
+                        :compute compute
+                        :os-detect false)]
+    (swap! repl-compute (constantly compute))
+    (swap! repl-session (constantly s))
+    (swap! repl-node-list (constantly (node-list-from-session s)))
+    (explain-session s)
+    (print-session-settings s)))
+
+(defn kill-repl-session
+  "Kills the current repl session killing also the node used"
+  []
+  (let [s (api/converge {(api/group-spec "repl-session") 0}
+                        :compute @repl-compute)]
+    (swap! repl-compute (constantly {}))
+    (swap! repl-node-list (constantly nil))))
+
+(defn step-lift [pfn & [options]]
+  "Provided that a repl-session has been initiated (see
+`start-repl-session`, this function will execute the supplied
+plan-fn `pfn` and explain the results.
+
+This function takes an optional `options` map to set whether the
+settings should be printed befor eand after the session is run (see
+`set-repl-options`)"
+  (let [{:keys [print-settings-before print-settings-after]
+         :or {print-settings-after true
+              print-settings-before true}
+         :as options} (or options @repl-options)
+        group (api/group-spec "repl-session" :phases {:configure pfn})
+        s (api/lift [group]
+                    :compute @repl-node-list
+                    :plan-state (:plan-state @repl-session)
+                    :os-detect false)]
+    (when print-settings-before
+      (print-session-settings @repl-session))
+    (swap! repl-session (constantly s))
+    (explain-session s)
+    (when print-settings-after
+      (print-session-settings s))))
+
+(defn explain-step
+  "Provided that a repl-session has been initiated (see
+`start-repl-session`), this fucntion will print out the effects of
+running the plan function `pfn`.
+
+This function takes an optional `options` map to set whether the
+settings should be printed befor eand after the session is run (see
+`set-repl-options`)"
+  [pfn & [options]]
+  (let [{:keys [print-settings-before
+                print-settings-after]
+         :or {print-settings-before true
+              print-settings-after true}
+         :as merged-options}
+        (merge  @repl-options options)]
+    (apply-map explain-plan
+               pfn
+               :session @repl-session
+               merged-options)))
+
+(defn set-repl-options
+  "Takes a map of options and sents them as a default for this repl session. Current options are:
+
+- :print-settings-before -> Whether to print the settings as they existed before a session is run
+- :print-settings-after -> Whether to print the settings once a session is run (real or mock
+"
+  [options]
+  (swap! repl-options (constantly options)))
